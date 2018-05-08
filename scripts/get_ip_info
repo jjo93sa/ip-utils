@@ -1,0 +1,53 @@
+#!/bin/bash
+
+#
+# Title: get_external_ip.sh
+#
+# Description:  Script to get IP address, usually the external IP in a NAT'd
+#+ network using the ipinfo.io service.
+# Including my ipinfo token in this script; don't be a dick.
+#
+# Usage:  Either source this file and call the function get_external_ip, or
+#+ run this script directly ./get_external_ip.sh
+#
+# Maintainer: dr.j.osborne@gmail.com
+#
+
+# ipinfo.io token for us
+
+: "${IPINFO_TOKEN:?IPINFO_TOKEN must be set in environment}"
+
+function get_host_ip()
+{
+    ifconfig | grep "inet " | grep -Fv 127.0.0.1 | sed -e 's/^[^0-9]*//; s/\(\([0-9]\{1,3\}\.\)\{3\}[0-9]\{1,3\}\).*/\1/'
+}
+
+function get_external_ip()
+{
+    local RAW_OUTPUT=
+
+    # Get the IP address from ipinfo.io
+    local IPINFO=$(curl -s ipinfo.io/?token=$IPINFO_TOKEN)
+    EXIT_STATUS=$?
+
+    if ! [ -x "$(command -v jq)" ]; then
+        echo 'Error: jq is not installed.' >&2
+        RAW_OUTPUT="true"
+    fi
+
+    if [ $RAW_OUTPUT ]; then
+        echo $IPINFO
+    else
+        echo $IPINFO | jq '.ip' | tr -d '"'
+    fi
+
+    return $EXIT_STATUS
+}
+
+# A smart bit of trickery to see if this script is running as exe or as source
+if [[ "$0" == "$BASH_SOURCE" ]]; then
+    # we haven't been sourced, so run as executable
+    get_host_ip
+    get_external_ip
+    exit $?
+fi

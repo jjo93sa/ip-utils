@@ -1,0 +1,53 @@
+#!/bin/bash
+#
+# Title: update_dns.sh
+#
+# Description:
+#   Update DuckDNS (https://www.duckdns.org/) with our current IP address.
+#   A user token is needed for this service.
+#
+# Credits:  None
+#
+# Usage:
+#   Either source this script and call updatedns().
+#    or
+#   Call this script directly with the message as first argument.
+#
+#   In either case, an IP address can be given as the first argument. If no IP
+#   is given, DuckDNS detect the IP address. If an IP is given, that is passed
+#   in the call to the service.
+#
+#   An environment variable must exist and be non-empty:
+#     DUCKDNS_TOKEN - the token used to identify the DuckDNS user;
+#   If these are not set, the script exits and no push message is sent.
+#
+# Maintainer: dr.j.osborne@gmail.com
+#
+
+# [#1 - IP address]
+function updatedns()
+{
+    local IPADDR=$1
+    local RET_VALUE
+
+    [[ -n "$IPADDR" ]] && IPSTR="&ip=$IPADDR"
+
+    DNS_RET=$(curl -s -S -w "%{http_code}" "https://www.duckdns.org/update?domains=poshboy&token=${DUCKDNS_TOKEN}${IPSTR}")
+
+    case "$DNS_RET" in
+        "OK200" ) RET_VALUE=0;;
+        *       ) RET_VALUE=1;;
+    esac
+
+    echo "$DNS_RET"
+
+    return $RET_VALUE
+}
+
+# A smart bit of trickery to see if this script is running as exe or as source
+if [[ "$0" == "$BASH_SOURCE" ]]; then
+    # we haven't been sourced, so run as executable
+    updatedns "$@"
+    exit $?
+fi
+
