@@ -23,6 +23,8 @@
 #
 # Maintainer: dr.j.osborne@gmail.com
 #
+# License: MIT, see LICENSE file in repository root
+#
 
 # [#1 - IP address]
 function updatedns()

@@ -1,16 +1,23 @@
 #!/bin/bash
-
 #
-# Title: get_external_ip.sh
 #
-# Description:  Script to get IP address, usually the external IP in a NAT'd
-#+ network using the ipinfo.io service.
-# Including my ipinfo token in this script; don't be a dick.
+# Title: get_ip_info
 #
-# Usage:  Either source this file and call the function get_external_ip, or
-#+ run this script directly ./get_external_ip.sh
+# Description:
+#   Script to get IP address information. Multiple functions:
+#
+#   - Function for getting public/external IP addresses using the ipinfo.io
+#     service. You need an account to use this sevrice, and must specify
+#     an access token;
+#   - Function that attempts to get the host local IP address.
+#
+# Usage:
+#   Either source this file and call the appropriate function, or run this
+#   script directly: ./get_ip_info
 #
 # Maintainer: dr.j.osborne@gmail.com
+#
+# License: MIT, see LICENSE file in repository root
 #
 
 # ipinfo.io token for us
