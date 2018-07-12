@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Title: update_dns.sh
+# Title: update_dns
 #
 # Description:
 #   Update DuckDNS (https://www.duckdns.org/) with our current IP address.
@@ -26,15 +26,24 @@
 # License: MIT, see LICENSE file in repository root
 #
 
-# [#1 - IP address]
+: "${DUCKDNS_TOKEN:?DUCKDNS_TOKEN env var must be set to use DuckDNS service}"
+
+# [#1 - Domain]
+# [#2 - IP address]
 function updatedns()
 {
-    local IPADDR=$1
+    # Check we've been supplied with two parameters
+    : ${2?"Usage: $0 <domain> <ip address>"}
+
+    local DOMAIN=$1
+    local IPADDR=$2
     local RET_VALUE
 
+    #TODO: What if these aren't set to reasonable values?
+    [[ -n "$DOMAIN" ]] && DMSTR="domains=$DOMAIN"
     [[ -n "$IPADDR" ]] && IPSTR="&ip=$IPADDR"
 
-    DNS_RET=$(curl -s -S -w "%{http_code}" "https://www.duckdns.org/update?domains=poshboy&token=${DUCKDNS_TOKEN}${IPSTR}")
+    DNS_RET=$(curl -s -S -w "%{http_code}" "https://www.duckdns.org/update?${DMSTR}&token=${DUCKDNS_TOKEN}${IPSTR}")
 
     case "$DNS_RET" in
         "OK200" ) RET_VALUE=0;;
