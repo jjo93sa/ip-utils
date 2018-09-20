@@ -1,6 +1,5 @@
 #!/bin/bash
 #
-#
 # Title: get_ip_info
 #
 # Description:
@@ -11,6 +10,12 @@
 #     an access token;
 #   - Function that attempts to get the host local IP address.
 #
+# Dependencies:
+#   For full functionality and validation jq is needed.
+#
+# Credits:
+#   None
+#
 # Usage:
 #   Either source this file and call the appropriate function, or run this
 #   script directly: ./get_ip_info
@@ -20,16 +25,17 @@
 # License: MIT, see LICENSE file in repository root
 #
 
-# ipinfo.io token for us
-
+# ipinfo.io token must be set!
 : "${IPINFO_TOKEN:?IPINFO_TOKEN must be set in environment}"
 
-function get_host_ip()
+# Experimental
+function get_host_ip
 {
     ifconfig | grep "inet " | grep -Fv 127.0.0.1 | sed -e 's/^[^0-9]*//; s/\(\([0-9]\{1,3\}\.\)\{3\}[0-9]\{1,3\}\).*/\1/'
 }
 
-function get_external_ip()
+# Deprecated
+function get_external_ip
 {
     local RAW_OUTPUT=
 
@@ -51,10 +57,130 @@ function get_external_ip()
     return $EXIT_STATUS
 }
 
+# This function dumps the raw output from the curl to ipinfo.io
+# The JSON reply is in stdout, the http headers in stderr
+function get_pub_ip_raw
+{
+   curl -s -D "/dev/stderr"  ipinfo.io/?token=$IPINFO_TOKEN
+
+    return $?
+}
+
+# This function attempts to validate the JSON output of ipinfo.io
+# jq is a dependency for validation. If the JSON isn't valid, no data return
+# If jq not available, the JSON is assumed valid.
+# Return codes:
+# 0 -- JSON valid
+# 1 -- JSON invalid (and empty string output)
+function get_pub_ip_json
+{
+    local IPINFO=$(get_pub_ip_raw 2>/dev/null)
+
+    # Detect if this is actually valid json
+    if [ -x "$(command -v jq)" ]
+    then
+        jq -e . >/dev/null 2>&1 <<< "${IPINFO}"
+        local JQ_PARSE_RES=$?
+
+        if [ "$JQ_PARSE_RES" -eq 0 ]
+        then
+            echo "${IPINFO}"
+            return 0
+        else
+            return ${JQ_PARSE_RES}
+        fi
+    else
+        # jq isn't available, so we simply have to trust that the ipinfo return
+        # is valid json. (We could at least check for {}?)
+        echo "${IPINFO}"
+        return 0
+    fi
+}
+
+# This function pattern matches an IP address in the validated JSON output of
+# get_pub_ip_json. If an IP address is found, it is sent to the caller.
+# Return codes:
+# 0 -- IP pattern found
+# 1?-- IP pattern not found
+function get_pub_ip
+{
+    grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}' <<< $(get_pub_ip_json)
+
+    # Presumably this next line will return the exit code of grep rather than
+    # get_pub_ip_json
+    return $?
+}
+
+# This function attempts to retry getting the public IP for cases when failures
+# are expected. Arguments to the function are (1) the number of iterations and
+# (2) the delay between attempts to get an IP address from ipinfo.io.
+# Default values: 4 attempts with 30 s delay.
+# Return codes:
+# 0 -- IP address retrieved successfully
+# 1 -- All IP address discovery attempts failed
+function get_pub_ip_retry
+{
+    RETRY_TIMES="${1:-4}"
+    RETRY_DELAY="${2:-30}"
+
+    local RETRY_COUNT=0
+
+    while [ "$RETRY_COUNT" -le "$RETRY_TIMES" ]
+    do
+        # A non-zero string here means grep must have matched in get_pub_ip
+        PUBLIC_IP=$(get_pub_ip)
+        if [[ ! -z $PUBLIC_IP && $? -eq 0 ]]
+        then
+            # We've got an address to echo and return
+            echo "${PUBLIC_IP}"
+            return 0
+        fi
+
+        (( RETRY_COUNT++ ))
+
+        sleep $RETRY_DELAY
+    done
+
+    # We didn't get an IP address, send no string to caller, return error
+    return 1
+}
+
 # A smart bit of trickery to see if this script is running as exe or as source
 if [[ "$0" == "$BASH_SOURCE" ]]; then
     # we haven't been sourced, so run as executable
-    get_host_ip
-    get_external_ip
+#DEBUG    get_host_ip
+#DEBUG    get_external_ip
+echo "Testing get_pub_ip_raw:"
+get_pub_ip_raw
+GET_RAW=$(get_pub_ip_raw)
+echo "Function return $?"
+echo "GET_RAW = ${GET_RAW}"
+echo
+echo "Testing get_pub_ip_json:"
+get_pub_ip_json
+echo "Function return $?"
+GET_JSON=$(get_pub_ip_json)
+echo "Function return $?"
+echo "GET_JSON = ${GET_JSON}"
+#[[ $(jq -e . >/dev/null 2>&1 <<< "${GET_JSON}" ) ]] && echo "GET_JSON valid"
+jq -e . >/dev/null 2>&1 <<< "${GET_JSON}" && {
+echo "GET_JSON is valid"
+}
+echo "jq Function return $?"
+echo
+echo "Testing get_pub_ip:"
+GET_IP=$(get_pub_ip)
+echo "Function return $?"
+echo "GET_IP = $GET_IP"
+[[ -z ${GET_IP} ]] && echo "GET_IP is empty string"
+echo
+echo "Testing get_pub_ip_retry:"
+RETRY_IP=$(get_pub_ip_retry )
+echo "Retry return = $?"
+echo "RETRY_IP = $RETRY_IP"
+[[ -z ${RETRY_IP} ]] && echo "empty RETRY_IP"
+## END DEBUG
+
+#
     exit $?
 fi
