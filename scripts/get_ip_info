@@ -148,39 +148,6 @@ function get_pub_ip_retry
 # A smart bit of trickery to see if this script is running as exe or as source
 if [[ "$0" == "$BASH_SOURCE" ]]; then
     # we haven't been sourced, so run as executable
-#DEBUG    get_host_ip
-#DEBUG    get_external_ip
-echo "Testing get_pub_ip_raw:"
-get_pub_ip_raw
-GET_RAW=$(get_pub_ip_raw)
-echo "Function return $?"
-echo "GET_RAW = ${GET_RAW}"
-echo
-echo "Testing get_pub_ip_json:"
-get_pub_ip_json
-echo "Function return $?"
-GET_JSON=$(get_pub_ip_json)
-echo "Function return $?"
-echo "GET_JSON = ${GET_JSON}"
-#[[ $(jq -e . >/dev/null 2>&1 <<< "${GET_JSON}" ) ]] && echo "GET_JSON valid"
-jq -e . >/dev/null 2>&1 <<< "${GET_JSON}" && {
-echo "GET_JSON is valid"
-}
-echo "jq Function return $?"
-echo
-echo "Testing get_pub_ip:"
-GET_IP=$(get_pub_ip)
-echo "Function return $?"
-echo "GET_IP = $GET_IP"
-[[ -z ${GET_IP} ]] && echo "GET_IP is empty string"
-echo
-echo "Testing get_pub_ip_retry:"
-RETRY_IP=$(get_pub_ip_retry )
-echo "Retry return = $?"
-echo "RETRY_IP = $RETRY_IP"
-[[ -z ${RETRY_IP} ]] && echo "empty RETRY_IP"
-## END DEBUG
-
-#
+    get_pub_ip
     exit $?
 fi

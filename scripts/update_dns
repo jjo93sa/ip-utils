@@ -3,37 +3,52 @@
 # Title: update_dns
 #
 # Description:
-#   Update DuckDNS (https://www.duckdns.org/) with our current IP address.
+#   Various functions for updating domain IP addresses with DNS providers
+#   Currently, only DuckDNS (https://www.duckdns.org/) is supported.
 #   A user token is needed for this service.
 #
-# Credits:  None
+# Dependencies:
+#   A Duck DNS user account with a registered domain, and the corresponding
+#   user token.
+#
+# Credits:
+#   None
 #
 # Usage:
-#   Either source this script and call updatedns().
+#   Either source this script and call one of the update_ functions
 #    or
-#   Call this script directly with the message as first argument.
+#   Call this script directly with the domain and ip address as 1st and 2nd
+#   parameters respectively.
 #
-#   In either case, an IP address can be given as the first argument. If no IP
-#   is given, DuckDNS detect the IP address. If an IP is given, that is passed
-#   in the call to the service.
+#   An environment variable must exist and be non-empty other wise the script
+#   exits with an error message:
+#     DUCKDNS_TOKEN - the token used to identify the DuckDNS user
 #
-#   An environment variable must exist and be non-empty:
-#     DUCKDNS_TOKEN - the token used to identify the DuckDNS user;
-#   If these are not set, the script exits and no push message is sent.
+# Maintainer:
+#   James Osborne, dr.j.osborne@gmail.com
 #
-# Maintainer: dr.j.osborne@gmail.com
-#
-# License: MIT, see LICENSE file in repository root
+# License:
+#   MIT, see LICENSE file in repository root
 #
 
 : "${DUCKDNS_TOKEN:?DUCKDNS_TOKEN env var must be set to use DuckDNS service}"
 
-# [#1 - Domain]
-# [#2 - IP address]
-function updatedns()
+# Return codes we use:
+EXIT_UPDATE_PASSED=0
+EXIT_UPDATE_FAILED=1
+EXIT_UPDATE_UNNEED=2
+EXIT_UPDATE_NO_DIG=3
+EXIT_UPDATE_MAXITN=4
+
+# This function updates a Duck DNS domain with a new IP address. Arguments to
+# this function are:
+# -- $1 - Domain
+# -- $2 - IP address
+# Return codes are as above,
+function update_duckdns
 {
     # Check we've been supplied with two parameters
-    : ${2?"Usage: $0 <domain> <ip address>"}
+    : ${2?"Usage: ${FUNCNAME[0]} <domain> <ip address>"}
 
     local DOMAIN=$1
     local IPADDR=$2
@@ -46,8 +61,8 @@ function updatedns()
     DNS_RET=$(curl -s -S -w "%{http_code}" "https://www.duckdns.org/update?${DMSTR}&token=${DUCKDNS_TOKEN}${IPSTR}")
 
     case "$DNS_RET" in
-        "OK200" ) RET_VALUE=0;;
-        *       ) RET_VALUE=1;;
+        "OK200" ) RET_VALUE=$EXIT_UPDATE_PASSED;;
+        *       ) RET_VALUE=$EXIT_UPDATE_FAILED;;
     esac
 
     echo "$DNS_RET"
@@ -55,10 +70,85 @@ function updatedns()
     return $RET_VALUE
 }
 
+# This function updates a Duck DNS domain with a new IP address only if the IP
+# retrieved from DNS is different. Dependency is dig must be installed.
+# Arguments to this function are:
+# -- $1 - Domain
+# -- $2 - IP address
+# Return codes are as above,
+function update_duckdns_conditional
+{
+    # Check we've been supplied with two parameters
+    : ${2?"Usage: ${FUNCNAME[0]} <domain> <ip address>"}
+
+    local DOMAIN=$1
+    local NEW_IP=$2
+    local RETURN_STATUS=$EXIT_UPDATE_FAILED # Assume failure
+    local IP_FROM_DNS='' # zero length
+
+    # Test if dig is installed
+    [ -x "$(command -v dig)" ] && {
+        if ! IP_FROM_DNS=$(dig ${DOMAIN}.duckdns.org | grep -v ";" \
+            | grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}')
+        then
+            # We didn't get a sensible IP, so there's nothing we can do
+            # return to exit function
+            return $EXIT_UPDATE_NO_DIG
+        fi
+    }
+
+    if [ -n "$IP_FROM_DNS" ] && [ "$NEW_IP" != "$IP_FROM_DNS" ]
+    then
+        # The IP from DNS is different to the new IP, so update DNS
+        if update_duckdns "${DOMAIN}" "${NEW_IP}"
+        then
+            return $EXIT_UPDATE_PASSED
+        fi
+    else
+        return $EXIT_UPDATE_UNNEED
+    fi
+
+    return $RETURN_STATUS
+}
+
+# This function makes repeated attempts to update a Duck DNS domain with a new
+# IP address, exiting on success. The number of attempts, and the delay period,
+# are passed to the funtion:
+# -- $1 - Domain
+# -- $2 - IP address
+# -- $3 - Retry count
+# -- $4 - Retry delay
+# Return codes are as above
+function update_duckdns_retry
+{
+    # Check we've been supplied with two parameters
+    : ${4?"Usage: ${FUNCNAME[0]} <domain> <ip address> <retry count> <retry delay>"}
+
+    local DOMAIN=$1
+    local NEW_IP=$2
+    local RETURN_STATUS=$EXIT_UPDATE_MAXITN # Assume failure
+    local RETRY_TIMES="${3:-4}"
+    local RETRY_DELAY="${4:-30}"
+    local RETRY_COUNT=0
+
+
+    while [ "$RETRY_COUNT" -le "$RETRY_TIMES" ]
+    do
+        # Now try to update DuckDNS,
+        update_duckdns $DOMAIN $NEW_IP >/dev/null 2>&1 && return $?
+
+        (( RETRY_COUNT++ ))
+
+        sleep $RETRY_DELAY
+    done
+
+    return $RETURN_STATUS
+}
+
 # A smart bit of trickery to see if this script is running as exe or as source
 if [[ "$0" == "$BASH_SOURCE" ]]; then
     # we haven't been sourced, so run as executable
-    updatedns "$@"
+    update_duckdns "$@"
     exit $?
 fi
 
