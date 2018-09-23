@@ -104,7 +104,8 @@ function get_pub_ip_json
 # 1?-- IP pattern not found
 function get_pub_ip
 {
-    grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}' <<< $(get_pub_ip_json)
+    # Retrict grep to single match in the JSON string; could use jq to pull out the ip
+    grep -m 1 -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}' <<< $(get_pub_ip_json)
 
     # Presumably this next line will return the exit code of grep rather than
     # get_pub_ip_json
